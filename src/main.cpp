@@ -77,6 +77,8 @@ std::string frame_id;
 // Boolean to use ned or enu frame. Defaults to enu which is data format from sensor.
 bool tf_ned_to_enu;
 bool frame_based_enu;
+// If use_any_date is true, the driver uses best available data. If use_any_data is false, the driver waits for estimated data from INS (e.g. for position velocity and oriantation).
+bool use_any_data;
 
 // Initial position after getting a GPS fix.
 vec3d initial_position;
@@ -139,6 +141,7 @@ int main(int argc, char *argv[])
     pn.param<std::string>("serial_port", SensorPort, "/dev/ttyUSB0");
     pn.param<int>("serial_baud", SensorBaudrate, 115200);
     pn.param<int>("fixed_imu_rate", SensorImuRate, 800);
+    pn.param<bool>("use_any_data", use_any_data, false);
 
     //Call to set covariances
     if(pn.getParam("linear_accel_covariance",rpc_temp))
@@ -399,14 +402,15 @@ void BinaryAsyncMessageReceived(void* userData, Packet& p, size_t index)
     // GPS
     if (user_data.device_family != VnSensor::Family::VnSensor_Family_Vn100)
     {
-        vec3d lla = cd.positionEstimatedLla();
+        // variable will be set to false if no estimated data for LLA position is available
+        bool llaEstimationAvailable = true;;
+
+        // position as latitude longitude altitude
+        vec3d lla;
 
         sensor_msgs::NavSatFix msgGPS;
         msgGPS.header.stamp = msgIMU.header.stamp;
         msgGPS.header.frame_id = msgIMU.header.frame_id;
-        msgGPS.latitude = lla[0];
-        msgGPS.longitude = lla[1];
-        msgGPS.altitude = lla[2];
 
         // Read the estimation uncertainty (1 Sigma) from the sensor and write it to the covariance matrix.
         if(cd.hasPositionUncertaintyEstimated())
@@ -415,6 +419,19 @@ void BinaryAsyncMessageReceived(void* userData, Packet& p, size_t index)
             msgGPS.position_covariance[0] = posVariance;    // East position variance
             msgGPS.position_covariance[4] = posVariance;    // North position vaciance
             msgGPS.position_covariance[8] = posVariance;    // Up position variance
+
+            // check if data is valid, else use position from GNSS instead of estimated position from INS.
+            if(posVariance == 0.0 && use_any_data) {
+                // INS data is invalid use GNSS data
+                llaEstimationAvailable = false;
+                if(cd.hasPositionUncertaintyGpsNed()) {
+                    // overwrite data
+                    vec3f posStdDev = cd.positionUncertaintyGpsNed();
+                    msgGPS.position_covariance[0] = pow(posStdDev[1], 2);    // East position variance
+                    msgGPS.position_covariance[4] = pow(posStdDev[0], 2);    // North position vaciance
+                    msgGPS.position_covariance[8] = pow(posStdDev[2], 2);    // Up position variance
+                }
+            }
 
             // mark gps fix as not available if the outputted standard deviation is 0
             if(cd.positionUncertaintyEstimated() != 0.0)
@@ -431,6 +448,22 @@ void BinaryAsyncMessageReceived(void* userData, Packet& p, size_t index)
         } else {
             msgGPS.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
         }
+
+        // add position to message
+        if(llaEstimationAvailable) {
+            // use INS position
+            lla = cd.positionEstimatedLla();
+            // DEBUG
+            ROS_INFO("INS pos used");
+        } else {
+            // use GNSS position
+            lla = cd.positionGpsLla();
+            // DEBUG
+            ROS_INFO("GNSS pos used");
+        }
+        msgGPS.latitude = lla[0];
+        msgGPS.longitude = lla[1];
+        msgGPS.altitude = lla[2];
 
         pubGPS.publish(msgGPS);
 
