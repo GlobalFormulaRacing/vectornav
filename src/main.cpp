@@ -261,6 +261,12 @@ int main(int argc, char *argv[])
             | INSGROUP_VELU,
             GPSGROUP_NONE);
 
+    // output GPS position additionally if use_any_data parameter is set to true.
+    if(use_any_data) {
+        bor.gpsField = bor.gpsField | GPSGROUP_POSLLA | GPSGROUP_POSU;
+        bor.gps2Field = bor.gps2Field | GPSGROUP_POSLLA | GPSGROUP_POSU;
+    }
+
     vs.writeBinaryOutput1(bor);
 
     // Set Data output Freq [Hz]
