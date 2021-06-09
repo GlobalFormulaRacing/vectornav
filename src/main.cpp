@@ -434,7 +434,7 @@ void BinaryAsyncMessageReceived(void* userData, Packet& p, size_t index)
             }
 
             // mark gps fix as not available if the outputted standard deviation is 0
-            if(cd.positionUncertaintyEstimated() != 0.0)
+            if(msgGPS.position_covariance[0] != 0.0)
             {
                 // Position available
                 msgGPS.status.status = sensor_msgs::NavSatStatus::STATUS_FIX;
