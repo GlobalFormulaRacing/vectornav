@@ -25,6 +25,9 @@ tf_ned_to_enu: false
 # If tf_ned_to_enu = true and frame_based_enu = true we rotate the quaternion to the frame matched label by multiplication
 frame_based_enu: false
 
+# If use_gps_data_alt is true, the driver uses best available data for gps message (either IMU or GPS1). (The GPS1 position is used as alternative) Note that IMU and GPS1 position aren't always the same. If use_gps_data_alt is false, the driver waits for estimated position data from INS (RTK fix required). This can cause longer startup times.
+use_gps_data_alt: false
+
 # Make sure all covariances below are of type xx.xx , i.e. double so that the rpc is parsed correctly
 
 # Linear Acceleration Covariances not produced by the sensor

@@ -77,8 +77,8 @@ std::string frame_id;
 // Boolean to use ned or enu frame. Defaults to enu which is data format from sensor.
 bool tf_ned_to_enu;
 bool frame_based_enu;
-// If use_any_date is true, the driver uses best available data. If use_any_data is false, the driver waits for estimated data from INS (e.g. for position velocity and oriantation).
-bool use_any_data;
+// If use_gps_data_alt is true, the driver uses best available data for gps message (either IMU or GPS1). If use_gps_data_alt is false, the driver waits for estimated position data from INS.
+bool use_gps_data_alt;
 
 // Initial position after getting a GPS fix.
 vec3d initial_position;
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
     pn.param<std::string>("serial_port", SensorPort, "/dev/ttyUSB0");
     pn.param<int>("serial_baud", SensorBaudrate, 115200);
     pn.param<int>("fixed_imu_rate", SensorImuRate, 800);
-    pn.param<bool>("use_any_data", use_any_data, false);
+    pn.param<bool>("use_gps_data_alt", use_gps_data_alt, false);
 
     //Call to set covariances
     if(pn.getParam("linear_accel_covariance",rpc_temp))
@@ -261,10 +261,9 @@ int main(int argc, char *argv[])
             | INSGROUP_VELU,
             GPSGROUP_NONE);
 
-    // output GPS position additionally if use_any_data parameter is set to true.
-    if(use_any_data) {
+    // output GPS position additionally if use_gps_data_alt parameter is set to true.
+    if(use_gps_data_alt) {
         bor.gpsField = bor.gpsField | GPSGROUP_POSLLA | GPSGROUP_POSU;
-        bor.gps2Field = bor.gps2Field | GPSGROUP_POSLLA | GPSGROUP_POSU;
     }
 
     vs.writeBinaryOutput1(bor);
@@ -427,7 +426,7 @@ void BinaryAsyncMessageReceived(void* userData, Packet& p, size_t index)
             msgGPS.position_covariance[8] = posVariance;    // Up position variance
 
             // check if data is valid, else use position from GNSS instead of estimated position from INS.
-            if(posVariance == 0.0 && use_any_data) {
+            if(posVariance == 0.0 && use_gps_data_alt) {
                 // INS data is invalid use GNSS data
                 llaEstimationAvailable = false;
                 if(cd.hasPositionUncertaintyGpsNed()) {
